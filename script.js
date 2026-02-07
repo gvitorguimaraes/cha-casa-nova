@@ -79,8 +79,24 @@ modal.innerHTML = `
 `;
 document.body.appendChild(modal);
 
+/* Error Modal */
+const errorModal = document.createElement("div");
+errorModal.innerHTML = `
+  <div class="modal-backdrop error-backdrop">
+    <div class="modal error-modal">
+      <p class="error-message">😕 Ops! Este presente já foi escolhido por outra pessoa.</p>
+      <p class="error-submessage">Por favor, escolha outro presente da lista.</p>
+      <div class="actions">
+        <button id="erro-ok">OK</button>
+      </div>
+    </div>
+  </div>
+`;
+document.body.appendChild(errorModal);
+
 const backdrop = modal.querySelector(".modal-backdrop");
 const textarea = modal.querySelector("textarea");
+const errorBackdrop = errorModal.querySelector(".error-backdrop");
 let currentId = null;
 
 /* Eventos dos cards */
@@ -93,6 +109,11 @@ document.querySelectorAll(".item").forEach(card => {
   });
 });
 
+/* Error Modal OK button */
+errorModal.querySelector("#erro-ok").onclick = () => {
+  errorBackdrop.classList.remove("active");
+};
+
 /* Cancelar */
 modal.querySelector("#cancelar").onclick = () => {
   backdrop.classList.remove("active");
@@ -102,9 +123,28 @@ modal.querySelector("#cancelar").onclick = () => {
 /* Confirmar */
 modal.querySelector("#confirmar").onclick = async () => {
   if (!currentId) return;
+
+  // Double-check before saving to prevent race condition
+  const checkSnap = await get(ref(db, `presentes/${currentId}`));
+  
+  if (checkSnap.exists()) {
+    // Someone else just selected it!
+    backdrop.classList.remove("active");
+    errorBackdrop.classList.add("active");
+    
+    // Hide the card
+    const card = document.querySelector(`[data-id="${currentId}"]`);
+    if (card) {
+      card.style.display = "none";
+    }
+    
+    currentId = null;
+    return;
+  }
   
   const mensagem = textarea.value.trim();
   
+  // Save to Firebase
   await set(ref(db, `presentes/${currentId}`), {
     mensagem: mensagem || null,
     timestamp: Date.now(),
